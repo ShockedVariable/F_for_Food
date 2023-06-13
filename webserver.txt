@@ -1,0 +1,117 @@
+#include <ESPAsyncWebServer.h>
+#include <StringArray.h>
+
+// Create AsyncWebServer object on port 80
+AsyncWebServer server(80);
+
+boolean takeNewPhoto = false;
+
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { text-align:center; }
+    .vert { margin-bottom: 10%; }
+    .hori{ margin-bottom: 0%; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h2>ESP32-CAM Last Photo</h2>
+    <p>It might take more than 5 seconds to capture a photo.</p>
+    <p>
+      <button onclick="rotatePhoto();">ROTATE</button>
+      <button onclick="capturePhoto()">CAPTURE PHOTO</button>
+      <button onclick="location.reload();">REFRESH PAGE</button>
+    </p>
+  </div>
+  <div><img src="saved-photo" id="photo" width="70%"></div>
+</body>
+<script>
+  var deg = 0;
+  function capturePhoto() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', "/capture", true);
+    xhr.send();
+  }
+  function rotatePhoto() {
+    var img = document.getElementById("photo");
+    deg += 90;
+    if(isOdd(deg/90)){ document.getElementById("container").className = "vert"; }
+    else{ document.getElementById("container").className = "hori"; }
+    img.style.transform = "rotate(" + deg + "deg)";
+  }
+  function isOdd(n) { return Math.abs(n % 2) == 1; }
+</script>
+</html>)rawliteral";
+
+// part of setup
+ // Route for root / web page
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
+        request->send_P(200, "text/html", index_html);
+    });
+
+    server.on("/capture", HTTP_GET, [](AsyncWebServerRequest * request) {
+        takeNewPhoto = true;
+        request->send_P(200, "text/plain", "Taking Photo");
+    });
+
+    server.on("/saved-photo", HTTP_GET, [](AsyncWebServerRequest * request) {
+        request->send(SPIFFS, FILE_PHOTO, "image/jpg", false);
+    });
+
+    // Start server
+    server.begin();
+  
+// part of loop
+    // if (takeNewPhoto) 
+    // {
+    //     capturePhotoSaveSpiffs();
+    //     takeNewPhoto = false;
+    // }
+
+// button stuff
+
+#define BUTTON 12
+int buttonState = HIGH;
+int lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+
+
+void pushButton()
+{
+    int button_reading = digitalRead(BUTTON);
+
+    if (button_reading != lastButtonState)
+    {
+        lastDebounceTime = millis();
+    }
+
+    // Check if the debounce delay has passed
+    if ((millis() - lastDebounceTime) > debounceDelay) 
+    {
+        // Update the button state if it has stabilized
+        if (button_reading != buttonState) 
+        {
+            buttonState = button_reading;
+
+            // Perform actions based on the button state change
+            if (buttonState == LOW) 
+            {
+                // Button is pressed
+                // Perform desired actions
+                capturePhotoSaveSpiffs();
+            } 
+            // else 
+            // {
+            //     // Button is released
+            //     // Perform desired actions
+            // }
+        }
+    }
+
+    // Update the last button state
+    lastButtonState = button_reading;
+}
